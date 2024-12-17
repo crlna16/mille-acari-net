@@ -59,11 +59,8 @@ class YOLODataset(Dataset):
         image_path = os.path.join(self.images_dir, self.image_files[idx])
         label_path = os.path.join(self.labels_dir, self.image_files[idx].replace('.jpg', '.txt'))
         
-        # Load image
         image = PIL.Image.open(image_path)
-        image = self.transform(image)
 
-        # Load labels
         labels = []
         if os.path.exists(label_path):
             with open(label_path, 'r') as f:
@@ -72,6 +69,7 @@ class YOLODataset(Dataset):
                     labels.append([class_id, x_center, y_center, width, height])
         
         # Convert to tensors
+        image = self.transform(image)
         labels = torch.tensor(labels, dtype=torch.float32)
 
         if self.transform:

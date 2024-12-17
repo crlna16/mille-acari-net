@@ -49,6 +49,9 @@ class MilleAcariNet(L.LightningModule):
         self.backbone = backbone
         self.lr = lr
 
+        self.loss_fn = None # TODO
+        self.acc_metric = None # TODO
+
     def forward(self, x):
         '''
         Model forward step calls the backbone.
