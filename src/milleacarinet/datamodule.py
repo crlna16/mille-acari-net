@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import v2
+from torchvision import tv_tensors
 
 import lightning as L
 
@@ -43,11 +44,9 @@ class YOLODataset(Dataset):
             self.image_files = image_files
 
         self.transform = v2.Compose([
-            v2.ToImage(),  # Convert to tensor, only needed if you had a PIL image
-            v2.ToDtype(torch.uint8, scale=True),  # optional, most input are already uint8 at this point
-            v2.RandomResizedCrop(size=(224, 224), antialias=True),  # Or Resize(antialias=True) TODO
-            v2.ToDtype(torch.float32, scale=True),  # Normalize expects float input
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), # TODO
+            v2.RandomIoUCrop(min_scale=0.0001, trials=400),
+            v2.Resize((512, 512)),
+            v2.ToDtype(torch.float32, scale=True)
         ])
 
         log.info(f'Number of image files: {len(self.image_files)}')
@@ -61,21 +60,35 @@ class YOLODataset(Dataset):
         
         image = PIL.Image.open(image_path)
 
-        labels = []
-        if os.path.exists(label_path):
-            with open(label_path, 'r') as f:
-                for line in f.readlines():
-                    class_id, x_center, y_center, width, height = map(float, line.strip().split())
-                    labels.append([class_id, x_center, y_center, width, height])
-        
+        yolo_boxes = []
+        yolo_classes = []
+        with open(label_path, 'r') as f:
+            line = f.readline()
+            while line:
+                class_id, x_center, y_center, width, height = map(float, line.strip().split())
+                yolo_boxes.append([x_center, y_center, width, height])
+                yolo_classes.append([class_id])
+                line = f.readline()
+
+        W, H = image.size
+        # From YOLO (0, 1) to torchvision (pixels)
+        tv_boxes = torch.from_numpy(np.array(yolo_boxes).copy())
+        tv_boxes[:, [0, 2]] *= W
+        tv_boxes[:, [1, 3]] *= H
+
         # Convert to tensors
-        image = self.transform(image)
-        labels = torch.tensor(labels, dtype=torch.float32)
+        tvt_boxes = tv_tensors.BoundingBoxes(tv_boxes, canvas_size=(image.size[1], image.size[0]), format='XYWH')
+        torch_image = torch.from_numpy(np.array(image).transpose(2, 0, 1))
+        tvt_image = tv_tensors.Image(torch_image)
 
+        print(torch_image.shape, len(tvt_boxes))
         if self.transform:
-            image, labels = self.transform(image, labels)
+            tvt_image, tvt_boxes = self.transform(tvt_image, tvt_boxes)
+            tvt_boxes = v2.SanitizeBoundingBoxes()({'labels': tvt_boxes})['labels']
+        print(tvt_image.shape, len(tvt_boxes))
 
-        return image, labels
+
+        return tvt_image, tvt_boxes.to(dtype=torch.float32)
 
 class MilleAcariDataModule(L.LightningDataModule):
     '''
