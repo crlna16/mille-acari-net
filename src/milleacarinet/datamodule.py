@@ -26,7 +26,7 @@ log = create_logger(log)
 
 class YOLODataset(Dataset):
     '''Dataset that complies with YOLO format'''
-    def __init__(self, images_dir: str, labels_dir: str, image_files: List[str]=None, augment=None):
+    def __init__(self, images_dir: str, labels_dir: str, image_files: List[str]=None, augment=None, size=512):
         '''
         Initializes the dataset.
 
@@ -35,6 +35,7 @@ class YOLODataset(Dataset):
           labels_dir (str): path to labels
           image_files (List[str]): list of image files. Defaults to None (use all available image files).
           augment: TODO specify data augmentation
+          size (int): Image target size. Defaults to 512.
         '''
         self.images_dir = images_dir
         self.labels_dir = labels_dir
@@ -46,6 +47,9 @@ class YOLODataset(Dataset):
         self.transform = v2.Compose([
             v2.RandomIoUCrop(min_scale=0.0001, trials=400),
             v2.Resize((512, 512)),
+            v2.RandomHorizontalFlip(0.5),
+            v2.RandomVerticalFlip(0.5),
+            v2.ColorJitter(),
             v2.ToDtype(torch.float32, scale=True)
         ])
 
@@ -77,7 +81,7 @@ class YOLODataset(Dataset):
         tv_boxes[:, [1, 3]] *= H
 
         # Convert to tensors
-        tvt_boxes = tv_tensors.BoundingBoxes(tv_boxes, canvas_size=(image.size[1], image.size[0]), format='XYWH')
+        tvt_boxes = tv_tensors.BoundingBoxes(tv_boxes, canvas_size=(image.size[1], image.size[0]), format='XYWH', dtype=torch.float32)
         torch_image = torch.from_numpy(np.array(image).transpose(2, 0, 1))
         tvt_image = tv_tensors.Image(torch_image)
 
@@ -87,8 +91,11 @@ class YOLODataset(Dataset):
             tvt_boxes = v2.SanitizeBoundingBoxes()({'labels': tvt_boxes})['labels']
         print(tvt_image.shape, len(tvt_boxes))
 
+        # Back to YOLO coordinates
+        tvt_boxes[:, [0, 2]] /= tvt_image.shape[-1]
+        tvt_boxes[:, [1, 3]] /= tvt_image.shape[-2]
 
-        return tvt_image, tvt_boxes.to(dtype=torch.float32)
+        return tvt_image, tvt_boxes
 
 class MilleAcariDataModule(L.LightningDataModule):
     '''
