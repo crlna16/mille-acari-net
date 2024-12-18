@@ -8,6 +8,10 @@ from torch import optim
 
 import lightning as L
 
+import torch.nn as nn
+
+from .utils import YoloLoss
+
 class YoloV5Backbone(nn.Module):
     '''
     Pretrained YOLOV5
@@ -49,7 +53,7 @@ class MilleAcariNet(L.LightningModule):
         self.backbone = backbone
         self.lr = lr
 
-        self.loss_fn = None # TODO
+        self.loss_fn = YoloLoss()
         self.acc_metric = None # TODO
 
     def forward(self, x):
@@ -62,18 +66,24 @@ class MilleAcariNet(L.LightningModule):
         '''Training step.'''
         x, y = batch
         yhat = self(x)
-        loss = self.loss_fn(yhat, y)
-        self.log('train/loss', loss)
+        pred_boxes = yhat[:, :, :4]
+        pred_obj_scores = yhat[:, :, 4]
+
+        loss = self.loss_fn(pred_boxes, y, pred_obj_scores)
+        self.log('train/loss', loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
         '''Validation step.'''
         x, y = batch
         yhat = self(x)
 
-        loss = self.loss_fn(yhat, y)
-        acc = self.acc_metric(yhat, y)
-        self.log('val/loss', loss, on_epoch=True)
-        self.log('val/acc', acc, on_epoch=True)
+        pred_boxes = yhat[:, :, :4]
+        pred_obj_scores = yhat[:, :, 4]
+
+        loss = self.loss_fn(pred_boxes, y, pred_obj_scores)
+        #acc = self.acc_metric(yhat, y)
+        self.log('val/loss', loss, on_epoch=True, prog_bar=True)
+        #self.log('val/acc', acc, on_epoch=True)
 
     def configure_optimizers(self):
         '''Configure the optimizer to train all model parameters'''

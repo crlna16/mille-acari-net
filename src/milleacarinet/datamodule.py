@@ -85,11 +85,9 @@ class YOLODataset(Dataset):
         torch_image = torch.from_numpy(np.array(image).transpose(2, 0, 1))
         tvt_image = tv_tensors.Image(torch_image)
 
-        print(torch_image.shape, len(tvt_boxes))
         if self.transform:
             tvt_image, tvt_boxes = self.transform(tvt_image, tvt_boxes)
             tvt_boxes = v2.SanitizeBoundingBoxes()({'labels': tvt_boxes})['labels']
-        print(tvt_image.shape, len(tvt_boxes))
 
         # Back to YOLO coordinates
         tvt_boxes[:, [0, 2]] /= tvt_image.shape[-1]

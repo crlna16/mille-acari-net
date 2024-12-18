@@ -7,6 +7,7 @@ datamodule:
   images_dir: ./data/images
   labels_dir: ./data/labels
   batch_size: 1
+  num_workers: 0
 
 backbone:
   # __target__: src.milleacarinet.model.Yolov5Backbone
