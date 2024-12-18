@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import logging
 
-def create_logger(log):
+def create_logger(log, level='info'):
     '''Adapt logger to our needs.
     
     Args:
@@ -12,7 +12,10 @@ def create_logger(log):
     Returns: 
       Logger.
     '''
-    log.setLevel(logging.INFO)  # Set the logging level to INFO
+    if level == 'info':
+        log.setLevel(logging.INFO)
+    elif level == 'debug':
+        log.setLevel(logging.DEBUG)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
 

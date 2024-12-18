@@ -15,6 +15,9 @@ from src.milleacarinet.datamodule import MilleAcariDataModule
 from src.milleacarinet.model import MilleAcariNet, YoloV5Backbone
 from src.milleacarinet.utils import create_logger
 
+import warnings
+warnings.filterwarnings('ignore')
+
 log = logging.getLogger(__name__)
 log = create_logger(log)
 

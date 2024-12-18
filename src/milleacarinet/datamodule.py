@@ -22,7 +22,7 @@ import logging
 
 from .utils import create_logger
 log = logging.getLogger(__name__)
-log = create_logger(log)
+log = create_logger(log, level='info')
 
 class YOLODataset(Dataset):
     '''Dataset that complies with YOLO format'''
@@ -45,7 +45,7 @@ class YOLODataset(Dataset):
             self.image_files = image_files
 
         self.transform = v2.Compose([
-            v2.RandomIoUCrop(min_scale=0.0001, trials=400),
+            #v2.RandomIoUCrop(min_scale=0.0001, trials=10000),
             v2.Resize((512, 512)),
             v2.RandomHorizontalFlip(0.5),
             v2.RandomVerticalFlip(0.5),
@@ -60,6 +60,7 @@ class YOLODataset(Dataset):
 
     def __getitem__(self, idx):
         image_path = os.path.join(self.images_dir, self.image_files[idx])
+        log.debug(image_path)
         label_path = os.path.join(self.labels_dir, self.image_files[idx].replace('.jpg', '.txt'))
         
         image = PIL.Image.open(image_path)
@@ -75,6 +76,7 @@ class YOLODataset(Dataset):
                 line = f.readline()
 
         W, H = image.size
+        log.debug(f'Image size: {W}, {H} with {len(yolo_boxes)} objects')
         # From YOLO (0, 1) to torchvision (pixels)
         tv_boxes = torch.from_numpy(np.array(yolo_boxes).copy())
         tv_boxes[:, [0, 2]] *= W

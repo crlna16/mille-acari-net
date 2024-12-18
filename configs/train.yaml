@@ -1,7 +1,7 @@
 # Default training configuration
 name: default-train
 
-seed: 456123789
+seed: 456123786
 
 datamodule:
   images_dir: ./data/images
@@ -20,3 +20,4 @@ model:
 trainer:
   accelerator: mps 
   num_nodes: 1
+  max_epochs: 100
