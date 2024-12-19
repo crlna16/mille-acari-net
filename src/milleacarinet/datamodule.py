@@ -20,7 +20,8 @@ import lightning as L
 
 import logging
 
-from .utils import create_logger
+from .utils import create_logger, RandomIoUCropWithFallback
+
 log = logging.getLogger(__name__)
 log = create_logger(log, level='info')
 
@@ -45,7 +46,7 @@ class YOLODataset(Dataset):
             self.image_files = image_files
 
         self.transform = v2.Compose([
-            #v2.RandomIoUCrop(min_scale=0.0001, trials=10000),
+            RandomIoUCropWithFallback({'min_scale': 0.0001, 'trials': 100}, {'size': 512}),
             v2.Resize((512, 512)),
             v2.RandomHorizontalFlip(0.5),
             v2.RandomVerticalFlip(0.5),
