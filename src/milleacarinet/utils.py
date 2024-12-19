@@ -112,7 +112,7 @@ class YoloLoss(nn.Module):
             total_obj_loss += obj_loss
 
         # Aggregate across batch
-        total_loss = (total_loc_loss + total_obj_loss) / batch_size
+        total_loss = (total_loc_loss + total_obj_loss + total_penalty_loss) / batch_size
         return total_loss
 
 class RandomIoUCropWithFallback(nn.Module):

@@ -56,6 +56,7 @@ def train(config_file):
     trainer.fit(model, datamodule)
 
     # Finalize
+    trainer.predict(model, dataloaders=datamodule.val_dataloader())
 
 
 if __name__=='__main__':
