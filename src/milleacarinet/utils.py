@@ -2,6 +2,11 @@
 import torch
 import torch.nn as nn
 import logging
+from torchvision.transforms import v2
+from torchvision import tv_tensors
+
+import logging
+thislog = logging.getLogger(__name__)
 
 def create_logger(log, level='info'):
     '''Adapt logger to our needs.
@@ -26,6 +31,8 @@ def create_logger(log, level='info'):
     console_handler.setFormatter(formatter)
     log.addHandler(console_handler)
     return log
+
+thislog = create_logger(thislog)
 
 def compute_iou(box1, box2):
     """
@@ -107,3 +114,32 @@ class YoloLoss(nn.Module):
         # Aggregate across batch
         total_loss = (total_loc_loss + total_obj_loss) / batch_size
         return total_loss
+
+class RandomIoUCropWithFallback(nn.Module):
+    '''
+    RandomIOUCrop with fallback strategy if no crop is found.
+    '''
+    def __init__(self, ioucrop_args, randomresizedcrop_args):
+        super().__init__()
+
+        self.ioucrop = v2.RandomIoUCrop(**ioucrop_args)
+        self.rrscrop = v2.RandomResizedCrop(**randomresizedcrop_args)
+
+    def forward(self, tv_image: tv_tensors.Image, tv_boxes: tv_tensors.BoundingBoxes):
+        '''
+        Apply RandomIoUCrop. If it fails, perform RandomResizedCrop.
+
+        Args:
+          tv_image: Image tv_tensor
+          tv_boxes: BoundingBoxes tv_tensor 
+
+        Returns:
+          tv_image, tv_boxes: Transformed tv_tensors
+        '''
+        try:
+            tv_image, tv_boxes = self.ioucrop(tv_image, tv_boxes)
+        except ZeroDivisionError:
+            thislog.info('Fallback to RandomResizedCrop')
+            tv_image, tv_boxes = self.rrscrop(tv_image, tv_boxes)
+
+        return tv_image, tv_boxes
