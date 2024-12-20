@@ -3,8 +3,10 @@ Script for training.
 '''
 
 import sys
-from omegaconf import OmegaConf
 import logging
+from omegaconf import OmegaConf
+
+import numpy as np
 
 import torch
 import lightning as L
@@ -56,7 +58,8 @@ def train(config_file):
     trainer.fit(model, datamodule)
 
     # Finalize
-    trainer.predict(model, dataloaders=datamodule.val_dataloader())
+    dbb = trainer.predict(model, dataloaders=datamodule.predict_dataloader())
+    np.save('prediction.npy', np.asarray(dbb))
 
 
 if __name__=='__main__':

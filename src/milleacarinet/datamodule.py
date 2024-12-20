@@ -206,3 +206,6 @@ class MilleAcariDataModule(L.LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=self.shuffle)
+
+    def predict_dataloader(self):
+        return DataLoader(self.val_ds, batch_size=1, )

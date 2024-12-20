@@ -69,21 +69,30 @@ class YoloLoss(nn.Module):
         self.iou_threshold = iou_threshold
         self.penalty_factor = penalty_factor
 
-    def forward(self, batch_y_hat, batch_y, batch_obj_scores):
+    def forward(self, batch_y_hat, batch_y, batch_obj_scores, min_obj_score=0):
         """
         :param y_hat: Predicted boxes (N_pred, 4) [x_center, y_center, w, h] normalized
         :param y: Ground truth boxes (N_gt, 4) [x_center, y_center, w, h] normalized
         :param obj_scores: Objectness scores (N_pred,)
+        min_obj_score: minimum object score
         """
         batch_size = batch_y_hat.shape[0]
         total_loc_loss = 0.0
         total_obj_loss = 0.0
         total_penalty_loss = 0.0
 
+        print('batch size', batch_size)
+
         for b in range(batch_size):
             y_hat = batch_y_hat[b]
             y = batch_y[b]
             obj_scores = batch_obj_scores[b]
+
+            ix =  obj_scores > min_obj_score
+            print(torch.sum(ix), len(ix))
+            obj_scores = obj_scores[ix]
+            y_hat = y_hat[ix]
+
             # Step 1: Compute IoU between predictions and ground truth
             iou_matrix = compute_iou(y_hat, y)
 

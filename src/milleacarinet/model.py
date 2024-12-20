@@ -2,6 +2,8 @@
 MilleAcariNet
 '''
 
+import logging
+
 import torch
 from torch import nn
 from torch import optim
@@ -10,7 +12,13 @@ import lightning as L
 
 import torch.nn as nn
 
-from .utils import YoloLoss
+from torchvision.utils import draw_bounding_boxes
+from torchvision.ops import box_convert
+
+from .utils import YoloLoss, create_logger
+
+log = logging.getLogger(__name__)
+log = create_logger(log)
 
 class YoloV5Backbone(nn.Module):
     '''
@@ -54,6 +62,7 @@ class MilleAcariNet(L.LightningModule):
     def __init__(self,
                  backbone: nn.Module,
                  lr: float,
+                 min_obj_score: float=1e-5,
                  ):
         '''
         Initializes MilleAcariNet.
@@ -61,10 +70,12 @@ class MilleAcariNet(L.LightningModule):
         Args:
           backbone (nn.Module): torch backbone
           lr (float): learning rate
+          min_obj_score (float): minimum object score for an object to be considered. Defaults to 1e-5.
         '''
         super().__init__()
         self.backbone = backbone
         self.lr = lr
+        self.min_obj_score = min_obj_score
 
         self.loss_fn = YoloLoss()
         self.acc_metric = None # TODO
@@ -82,7 +93,7 @@ class MilleAcariNet(L.LightningModule):
         pred_boxes = yhat[:, :, :4]
         pred_obj_scores = yhat[:, :, 4]
 
-        loss = self.loss_fn(pred_boxes, y, pred_obj_scores)
+        loss = self.loss_fn(pred_boxes, y, pred_obj_scores, min_obj_score=self.min_obj_score)
         self.log('train/loss', loss, prog_bar=True)
 
     def validation_step(self, batch, batch_idx):
@@ -93,7 +104,8 @@ class MilleAcariNet(L.LightningModule):
         pred_boxes = yhat[:, :, :4]
         pred_obj_scores = yhat[:, :, 4]
 
-        loss = self.loss_fn(pred_boxes, y, pred_obj_scores)
+        loss = self.loss_fn(pred_boxes, y, pred_obj_scores, min_obj_score=self.min_obj_score)
+
         #acc = self.acc_metric(yhat, y)
         self.log('val/loss', loss, on_epoch=True, prog_bar=True)
         #self.log('val/acc', acc, on_epoch=True)
@@ -105,8 +117,11 @@ class MilleAcariNet(L.LightningModule):
         pred_boxes = yhat[:, :, :4]
         pred_obj_scores = yhat[:, :, 4]
 
-        loss = self.loss_fn(pred_boxes, y, pred_obj_scores)
-        return loss
+        loss = self.loss_fn(pred_boxes, y, pred_obj_scores, min_obj_score=self.min_obj_score)
+        log.info(f'Predict loss: {loss:.2e}')
+        trafo_boxes_xyxy = box_convert(pred_boxes.squeeze(0), in_fmt='xywh', out_fmt='xyxy')
+        dbb = draw_bounding_boxes(x.squeeze(0), trafo_boxes_xyxy, labels=None, colors='red', fill=True, width=10)
+        return dbb.cpu().numpy()
 
     def configure_optimizers(self):
         '''Configure the optimizer to train all model parameters'''
