@@ -159,3 +159,4 @@ data/
 .venv/
 lightning_logs/
 *.pt
+*.npy

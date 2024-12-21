@@ -17,6 +17,9 @@ from torch.utils.data import Dataset, IterableDataset, DataLoader
 from torchvision.transforms import v2
 from torchvision import tv_tensors
 
+from torchvision.utils import draw_bounding_boxes
+from torchvision.ops import box_convert
+
 import lightning as L
 
 import logging
@@ -81,7 +84,7 @@ class YOLOBaseDataset(ABC):
         tv_boxes[:, [1, 3]] *= H
 
         # Convert to tensors
-        tvt_boxes = tv_tensors.BoundingBoxes(tv_boxes, canvas_size=(image.size[1], image.size[0]), format='XYWH', dtype=torch.float32)
+        tvt_boxes = tv_tensors.BoundingBoxes(tv_boxes, canvas_size=(H, W), format='XYWH', dtype=torch.float32)
         torch_image = torch.from_numpy(np.array(image).transpose(2, 0, 1))
         tvt_image = tv_tensors.Image(torch_image)
 
@@ -139,6 +142,11 @@ class YOLOIterableDataset(YOLOBaseDataset, IterableDataset):
 
     def __iter__(self):
         random_ix = int(np.random.randint(0, len(self.image_files), size=1))
+        tvt_images, tvt_boxes = self.getitem(random_ix)
+        trafo_boxes_xyxy = box_convert(tvt_boxes.squeeze(0), in_fmt='xywh', out_fmt='xyxy')
+        dbb = draw_bounding_boxes(tvt_images.squeeze(0), trafo_boxes_xyxy, labels=None, colors='red', fill=True, width=10)
+        dbb = dbb.cpu().numpy()
+        np.save(f'sample_{random_ix}', dbb)
         yield self.getitem(random_ix)
 
 class MilleAcariDataModule(L.LightningDataModule):
