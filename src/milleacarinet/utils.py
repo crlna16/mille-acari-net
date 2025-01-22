@@ -162,18 +162,21 @@ def collate_fn(batch):
                - image: torch.Tensor of shape (3, H, W)
                - bounding_boxes: torch.Tensor of shape (N, 4)
     """
-    images = [item[0] for item in batch if item[1].size(0) > 0]  # Filter out empty bounding boxes
-    bboxes = [item[1] for item in batch if item[1].size(0) > 0]
+    images = []
+    bboxes = []
+
+    for image, boxes in batch:
+        if boxes.size(0) > 0:  # Only add non-empty bounding boxes
+            images.append(image)
+            bboxes.append(boxes)
 
     if len(images) == 0 or len(bboxes) == 0:
         raise ValueError("All bounding boxes are empty in the batch.")
 
-    for sample in batch:
-        image, boxes = sample
-        images.append(image)  # Add the image tensor to the list
-        bboxes.append(boxes)  # Add the bounding boxes tensor to the list
-
-    # Stack images into a single tensor of shape (batch_size, 3, 512, 512)
+    # Stack images into a single tensor of shape (batch_size, 3, H, W)
     images = torch.stack(images, dim=0)
+
+    # Pad bounding boxes to the same size
+    bboxes = pad_sequence(bboxes, batch_first=True, padding_value=0)
 
     return images, bboxes
