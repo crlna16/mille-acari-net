@@ -35,6 +35,7 @@ def train(config_file):
 
     # Seed everything
     if config['seed']:
+        log.info('Setting seed')
         torch.manual_seed(config['seed'])
 
     # Instantiate the datamodule

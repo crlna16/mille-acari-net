@@ -24,7 +24,7 @@ import lightning as L
 
 import logging
 
-from .utils import create_logger, RandomIoUCropWithFallback
+from .utils import create_logger, collate_fn, RandomIoUCropWithFallback
 
 log = logging.getLogger(__name__)
 log = create_logger(log, level='info')
@@ -144,10 +144,12 @@ class YOLOIterableDataset(YOLOBaseDataset, IterableDataset):
         random_ix = int(np.random.randint(0, len(self.image_files), size=1))
         tvt_images, tvt_boxes = self.getitem(random_ix)
         trafo_boxes_xyxy = box_convert(tvt_boxes.squeeze(0), in_fmt='xywh', out_fmt='xyxy')
+        log.info(tvt_boxes)
+        log.info(trafo_boxes_xyxy)
         dbb = draw_bounding_boxes(tvt_images.squeeze(0), trafo_boxes_xyxy, labels=None, colors='red', fill=True, width=10)
         dbb = dbb.cpu().numpy()
         np.save(f'sample_{random_ix}', dbb)
-        yield self.getitem(random_ix)
+        yield tvt_images, tvt_boxes
 
 class MilleAcariDataModule(L.LightningDataModule):
     '''
@@ -210,10 +212,10 @@ class MilleAcariDataModule(L.LightningDataModule):
             raise NotImplementedError('Test stage is not implemented.')
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=self.shuffle)
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, collate_fn=collate_fn, shuffle=self.shuffle)
 
     def val_dataloader(self):
-        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=self.shuffle)
+        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, collate_fn=collate_fn, shuffle=self.shuffle)
 
     def predict_dataloader(self):
         return DataLoader(self.val_ds, batch_size=1, )

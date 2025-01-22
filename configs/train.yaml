@@ -6,10 +6,10 @@ seed: 456123786
 datamodule:
   images_dir: ./data/images
   labels_dir: ./data/labels
-  batch_size: 512 
+  batch_size: 20
   num_workers: 0
   val_size: 1
-  max_samples: 16384
+  max_samples: null 
 
 backbone:
   # __target__: src.milleacarinet.model.Yolov5Backbone
@@ -24,4 +24,4 @@ model:
 trainer:
   accelerator: mps 
   num_nodes: 1
-  max_epochs: 10
+  max_epochs: 100

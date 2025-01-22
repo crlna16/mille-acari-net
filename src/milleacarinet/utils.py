@@ -1,9 +1,9 @@
-
 import torch
 import torch.nn as nn
 import logging
 from torchvision.transforms import v2
 from torchvision import tv_tensors
+from torch.nn.utils.rnn import pad_sequence
 
 import logging
 thislog = logging.getLogger(__name__)
@@ -81,15 +81,12 @@ class YoloLoss(nn.Module):
         total_obj_loss = 0.0
         total_penalty_loss = 0.0
 
-        print('batch size', batch_size)
-
         for b in range(batch_size):
             y_hat = batch_y_hat[b]
             y = batch_y[b]
             obj_scores = batch_obj_scores[b]
 
             ix =  obj_scores > min_obj_score
-            print(torch.sum(ix), len(ix))
             obj_scores = obj_scores[ix]
             y_hat = y_hat[ix]
 
@@ -148,7 +145,35 @@ class RandomIoUCropWithFallback(nn.Module):
         try:
             tv_image, tv_boxes = self.ioucrop(tv_image, tv_boxes)
         except ZeroDivisionError:
-            thislog.info('Fallback to RandomResizedCrop')
+            thislog.debug('Fallback to RandomResizedCrop')
             tv_image, tv_boxes = self.rrscrop(tv_image, tv_boxes)
 
         return tv_image, tv_boxes
+
+def collate_fn(batch):
+    """
+    Custom collate function for object detection datasets.
+
+    This is to collate samples with different number of bounding boxes.
+
+    Args:
+        batch: A list of samples, where each sample is a tuple:
+               (image, bounding_boxes), where
+               - image: torch.Tensor of shape (3, H, W)
+               - bounding_boxes: torch.Tensor of shape (N, 4)
+    """
+    images = [item[0] for item in batch if item[1].size(0) > 0]  # Filter out empty bounding boxes
+    bboxes = [item[1] for item in batch if item[1].size(0) > 0]
+
+    if len(images) == 0 or len(bboxes) == 0:
+        raise ValueError("All bounding boxes are empty in the batch.")
+
+    for sample in batch:
+        image, boxes = sample
+        images.append(image)  # Add the image tensor to the list
+        bboxes.append(boxes)  # Add the bounding boxes tensor to the list
+
+    # Stack images into a single tensor of shape (batch_size, 3, 512, 512)
+    images = torch.stack(images, dim=0)
+
+    return images, bboxes
