@@ -50,7 +50,7 @@ def train(config_file):
     model = MilleAcariNet(backbone=backbone, **config['model'])
 
     # Instantiate the callbacks
-    callbacks = []
+    callbacks = [EarlyStopping(monitor='val/loss', patience=5, mode='min')]
 
     # Instantiate the trainer
     trainer = L.Trainer(**config['trainer'], callbacks=callbacks)

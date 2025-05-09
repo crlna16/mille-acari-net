@@ -31,7 +31,7 @@ log = create_logger(log, level='debug')
 
 class YOLOBaseDataset(ABC):
     '''Dataset that complies with YOLO format. Base class for map-style and iterable dataset.'''
-    def __init__(self, images_dir: str, labels_dir: str, image_files: List[str]=None, augment=None, size=512):
+    def __init__(self, images_dir: str, labels_dir: str, image_files: List[str]=None, augment=None, size=640):
         '''
         Initializes the dataset.
 
@@ -40,7 +40,7 @@ class YOLOBaseDataset(ABC):
           labels_dir (str): path to labels
           image_files (List[str]): list of image files. Defaults to None (use all available image files).
           augment: TODO specify data augmentation
-          size (int): Image target size. Defaults to 512.
+          size (int): Image target size. Defaults to 640.
         '''
         self.images_dir = images_dir
         self.labels_dir = labels_dir
@@ -50,11 +50,12 @@ class YOLOBaseDataset(ABC):
             self.image_files = image_files
 
         self.transform = v2.Compose([
-            RandomIoUCropWithFallback({'min_scale': 0.0001, 'trials': 100}, {'size': 512}),
-            v2.Resize((512, 512)),
+            RandomIoUCropWithFallback({'min_scale': 0.5, 'trials': 100}, {'size': size}),  # Increase min_scale to avoid extreme crops
+            v2.Resize((size, size)),  # Increased from 512 to 640 for better detail
             v2.RandomHorizontalFlip(0.5),
             v2.RandomVerticalFlip(0.5),
-            v2.ColorJitter(),
+            v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # More controlled color jitter
+            v2.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.0)),  # Add blur for robustness
             v2.ToDtype(torch.float32, scale=True)
         ])
 
@@ -226,4 +227,5 @@ class MilleAcariDataModule(L.LightningDataModule):
         return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, collate_fn=collate_fn, shuffle=self.shuffle)
 
     def predict_dataloader(self):
+        # TODO run predictions on the unlabeled data
         return DataLoader(self.val_ds, batch_size=1, )
