@@ -27,7 +27,7 @@ import logging
 from .utils import create_logger, collate_fn, RandomIoUCropWithFallback
 
 log = logging.getLogger(__name__)
-log = create_logger(log, level='debug')
+log = create_logger(log)
 
 class YOLOBaseDataset(ABC):
     '''Dataset that complies with YOLO format. Base class for map-style and iterable dataset.'''
@@ -199,6 +199,7 @@ class MilleAcariDataModule(L.LightningDataModule):
         # will be assigned in setup
         self.train_ds = None
         self.val_ds = None
+        self.test_ds = None
         self.shuffle = False
 
     def prepare_data(self):
@@ -217,6 +218,8 @@ class MilleAcariDataModule(L.LightningDataModule):
                 self.train_ds = YOLOIterableDataset(self.images_dir, self.labels_dir, train_files, self.augment, self.size, self.max_samples)
                 self.val_ds = YOLOIterableDataset(self.images_dir, self.labels_dir, val_files, self.augment, self.size, self.max_samples)
 
+            self.test_ds = YOLODataset(self.images_dir, self.labels_dir, val_files, self.augment)
+
         elif stage == 'test':
             raise NotImplementedError('Test stage is not implemented.')
 
@@ -225,6 +228,9 @@ class MilleAcariDataModule(L.LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, collate_fn=collate_fn, shuffle=self.shuffle)
+
+    def test_dataloader(self):
+        return DataLoader(self.test_ds, batch_size=1, num_workers=self.num_workers, collate_fn=collate_fn, shuffle=self.shuffle)
 
     def predict_dataloader(self):
         # TODO run predictions on the unlabeled data

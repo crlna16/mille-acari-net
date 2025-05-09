@@ -59,7 +59,7 @@ def train(config_file):
     trainer.fit(model, datamodule)
 
     # Finalize
-    dbb = trainer.predict(model, dataloaders=datamodule.predict_dataloader())
+    dbb = trainer.predict(model, dataloaders=datamodule.test_dataloader())
     np.save('prediction.npy', np.asarray(dbb))
 
 
