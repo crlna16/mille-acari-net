@@ -19,8 +19,11 @@ backbone:
 model:
   lr: 0.0001
   min_obj_score: 0.001  # Reduced confidence threshold to detect smaller objects
+  iou_threshold: 0.90
+  confidence_threshold: 0.01
 
 trainer:
   accelerator: mps 
   num_nodes: 1
-  max_epochs: 100
+  max_epochs: 1
+  num_sanity_val_steps: 0
