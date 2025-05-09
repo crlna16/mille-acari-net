@@ -64,31 +64,49 @@ class YoloLoss(nn.Module):
     '''Loss for object detection'''
     def __init__(self, iou_threshold=0.5, penalty_factor=0.1):
         super(YoloLoss, self).__init__()
-        self.mse_loss = nn.MSELoss()
-        self.bce_loss = nn.BCEWithLogitsLoss()
+        self.mse_loss = nn.MSELoss(reduction='sum')  # Changed to sum for proper normalization
+        self.bce_loss = nn.BCEWithLogitsLoss(reduction='sum')
         self.iou_threshold = iou_threshold
         self.penalty_factor = penalty_factor
 
-    def forward(self, batch_y_hat, batch_y, batch_obj_scores, min_obj_score=0):
+    def forward(self, batch_y_hat, batch_y, batch_obj_scores, min_obj_score=0, batch_class_pred=None, batch_class_target=None):
         """
-        :param y_hat: Predicted boxes (N_pred, 4) [x_center, y_center, w, h] normalized
-        :param y: Ground truth boxes (N_gt, 4) [x_center, y_center, w, h] normalized
-        :param obj_scores: Objectness scores (N_pred,)
-        min_obj_score: minimum object score
+        :param batch_y_hat: Predicted boxes (batch_size, N_pred, 4) [x_center, y_center, w, h] normalized
+        :param batch_y: Ground truth boxes (batch_size, N_gt, 4) [x_center, y_center, w, h] normalized
+        :param batch_obj_scores: Objectness scores (batch_size, N_pred)
+         am :param min_obj_score: minimum object score
+        :param batch_class_pred: Optional class predictions (batch_size, N_pred, num_classes)
+        :param batch_class_target: Optional class targets (batch_size, N_gt)
+        :return: total loss
         """
         batch_size = batch_y_hat.shape[0]
         total_loc_loss = 0.0
         total_obj_loss = 0.0
         total_penalty_loss = 0.0
+        total_class_loss = 0.0
+        valid_batches = 0
 
         for b in range(batch_size):
             y_hat = batch_y_hat[b]
             y = batch_y[b]
             obj_scores = batch_obj_scores[b]
 
-            ix =  obj_scores > min_obj_score
+            # Filter predictions by confidence threshold
+            ix = obj_scores > min_obj_score
             obj_scores = obj_scores[ix]
             y_hat = y_hat[ix]
+
+            # Skip computation if there are no predictions after filtering
+            if y_hat.shape[0] == 0:
+                continue
+
+            # Skip computation if there are no ground truth boxes
+            if y.shape[0] == 0:
+                # Still penalize high confidence predictions when no objects exist
+                obj_loss = self.bce_loss(obj_scores, torch.zeros_like(obj_scores))
+                total_obj_loss += obj_loss
+                valid_batches += 1
+                continue
 
             # Step 1: Compute IoU between predictions and ground truth
             iou_matrix = compute_iou(y_hat, y)
@@ -99,26 +117,40 @@ class YoloLoss(nn.Module):
             unmatched_pred_mask = ~matched_gt_mask  # Unmatched predictions
         
             # Step 3: Localization Loss (for matched boxes only)
-            matched_preds = y_hat[matched_gt_mask]
-            matched_gt = y[match_idx[matched_gt_mask]]
-            if len(matched_preds) > 0:
+            if matched_gt_mask.sum() > 0:
+                matched_preds = y_hat[matched_gt_mask]
+                matched_gt = y[match_idx[matched_gt_mask]]
                 loc_loss = self.mse_loss(matched_preds, matched_gt)
-            else:
-                loc_loss = 0.0  # No matched predictions, so no localization loss
+                total_loc_loss += loc_loss
 
-            # Penalty term for unmatched boxes
-            total_penalty_loss += self.penalty_factor * unmatched_pred_mask.sum().float()
+                # Add class loss if class predictions are provided
+                if batch_class_pred is not None and batch_class_target is not None:
+                    class_pred = batch_class_pred[b][ix][matched_gt_mask]
+                    class_target = batch_class_target[b][match_idx[matched_gt_mask]]
+                    class_loss = nn.functional.cross_entropy(
+                        class_pred, class_target.long(), reduction='sum')
+                    total_class_loss += class_loss
+
+            # Penalty term for unmatched high-confidence predictions (weighted by confidence)
+            if unmatched_pred_mask.sum() > 0:
+                unmatched_scores = obj_scores[unmatched_pred_mask]
+                penalty = self.penalty_factor * unmatched_scores.sum()
+                total_penalty_loss += penalty
 
             # Step 4: Objectness Loss
             obj_labels = torch.zeros_like(obj_scores)
             obj_labels[matched_gt_mask] = 1  # Object exists for matched predictions
             obj_loss = self.bce_loss(obj_scores, obj_labels)
-
-            total_loc_loss += loc_loss
             total_obj_loss += obj_loss
+            
+            valid_batches += 1
 
-        # Aggregate across batch
-        total_loss = (total_loc_loss + total_obj_loss + total_penalty_loss) / batch_size
+        # Prevent division by zero if all batches were skipped
+        if valid_batches == 0:
+            return torch.tensor(0.0, device=batch_y_hat.device, requires_grad=True)
+            
+        # Normalize by the number of valid batches and objects
+        total_loss = (total_loc_loss + total_obj_loss + total_penalty_loss + total_class_loss) / valid_batches
         return total_loss
 
 class RandomIoUCropWithFallback(nn.Module):

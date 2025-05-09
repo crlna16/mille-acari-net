@@ -27,7 +27,7 @@ import logging
 from .utils import create_logger, collate_fn, RandomIoUCropWithFallback
 
 log = logging.getLogger(__name__)
-log = create_logger(log, level='info')
+log = create_logger(log, level='debug')
 
 class YOLOBaseDataset(ABC):
     '''Dataset that complies with YOLO format. Base class for map-style and iterable dataset.'''
@@ -63,7 +63,7 @@ class YOLOBaseDataset(ABC):
     def getitem(self, idx):
         image_path = os.path.join(self.images_dir, self.image_files[idx])
         label_path = os.path.join(self.labels_dir, self.image_files[idx].replace('.jpg', '.txt'))
-        
+
         image = PIL.Image.open(image_path)
 
         yolo_boxes = []
@@ -78,10 +78,14 @@ class YOLOBaseDataset(ABC):
 
         W, H = image.size
         log.debug(f'Image size: {W}, {H} with {len(yolo_boxes)} objects')
+        log.debug(f'Original YOLO boxes: {yolo_boxes}')
+
         # From YOLO (0, 1) to torchvision (pixels)
         tv_boxes = torch.from_numpy(np.array(yolo_boxes).copy())
         tv_boxes[:, [0, 2]] *= W
         tv_boxes[:, [1, 3]] *= H
+
+        log.debug(f'Torchvision boxes (pixels): {tv_boxes}')
 
         # Convert to tensors
         tvt_boxes = tv_tensors.BoundingBoxes(tv_boxes, canvas_size=(H, W), format='XYWH', dtype=torch.float32)
@@ -90,11 +94,16 @@ class YOLOBaseDataset(ABC):
 
         if self.transform:
             tvt_image, tvt_boxes = self.transform(tvt_image, tvt_boxes)
+            log.debug(f'Transformed image shape: {tvt_image.shape}')
+            log.debug(f'Transformed boxes before sanitization: {tvt_boxes}')
             tvt_boxes = v2.SanitizeBoundingBoxes()({'labels': tvt_boxes})['labels']
+            log.debug(f'Sanitized boxes: {tvt_boxes}')
 
         # Back to YOLO coordinates
         tvt_boxes[:, [0, 2]] /= tvt_image.shape[-1]
         tvt_boxes[:, [1, 3]] /= tvt_image.shape[-2]
+
+        log.debug(f'Final YOLO boxes: {tvt_boxes}')
 
         return tvt_image, tvt_boxes
 
@@ -141,15 +150,14 @@ class YOLOIterableDataset(YOLOBaseDataset, IterableDataset):
         return self.max_samples
 
     def __iter__(self):
-        random_ix = int(np.random.randint(0, len(self.image_files), size=1))
-        tvt_images, tvt_boxes = self.getitem(random_ix)
-        trafo_boxes_xyxy = box_convert(tvt_boxes.squeeze(0), in_fmt='xywh', out_fmt='xyxy')
-        log.info(tvt_boxes)
-        log.info(trafo_boxes_xyxy)
-        dbb = draw_bounding_boxes(tvt_images.squeeze(0), trafo_boxes_xyxy, labels=None, colors='red', fill=True, width=10)
-        dbb = dbb.cpu().numpy()
-        np.save(f'sample_{random_ix}', dbb)
-        yield tvt_images, tvt_boxes
+        # Generate up to max_samples
+        for _ in range(self.max_samples):
+            # Select a random image index
+            random_ix = int(np.random.randint(0, len(self.image_files), size=1))
+            # Get the image and boxes for this index
+            tvt_images, tvt_boxes = self.getitem(random_ix)
+            # Return the images and boxes in XYWH format (same as YOLODataset)
+            yield tvt_images, tvt_boxes
 
 class MilleAcariDataModule(L.LightningDataModule):
     '''

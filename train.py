@@ -21,7 +21,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 log = logging.getLogger(__name__)
-log = create_logger(log)
+log = create_logger(log, level=logging.DEBUG)  # Ensure logging level is set to DEBUG
 
 def train(config_file):
     '''

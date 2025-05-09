@@ -1,0 +1,27 @@
+# Default training configuration
+name: default-train
+
+seed: 456123786
+
+datamodule:
+  images_dir: ./data/images
+  labels_dir: ./data/labels
+  batch_size: 20
+  num_workers: 0
+  val_size: 3
+  max_samples: null 
+
+backbone:
+  # __target__: src.milleacarinet.model.Yolov5Backbone
+  flavor: yolov5s
+  pretrained: True
+  freeze_depth: 23 
+
+model:
+  lr: 0.0001 # learning rate
+  min_obj_score: 0.01
+
+trainer:
+  accelerator: mps 
+  num_nodes: 1
+  max_epochs: 1

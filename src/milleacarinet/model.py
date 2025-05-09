@@ -43,10 +43,8 @@ class YoloV5Backbone(nn.Module):
 
         for key, val in self.model.named_parameters():
             depth = int(key.split('.')[3])
-            print(depth, key, val.requires_grad)
             if depth > self.freeze_depth:
                 val.requires_grad = True
-            print(depth, key, val.requires_grad)
 
     def forward(self, x):
         '''Apply model'''
@@ -114,11 +112,13 @@ class MilleAcariNet(L.LightningModule):
         x, y = batch
         yhat = self(x)
 
-        pred_boxes = yhat[:, :, :4]
+        pred_boxes = yhat[:, :, :4]  # boxes in XYWH format
         pred_obj_scores = yhat[:, :, 4]
 
         loss = self.loss_fn(pred_boxes, y, pred_obj_scores, min_obj_score=self.min_obj_score)
         log.info(f'Predict loss: {loss:.2e}')
+        
+        # Convert boxes from XYWH to XYXY for visualization with draw_bounding_boxes
         trafo_boxes_xyxy = box_convert(pred_boxes.squeeze(0), in_fmt='xywh', out_fmt='xyxy')
         dbb = draw_bounding_boxes(x.squeeze(0), trafo_boxes_xyxy, labels=None, colors='red', fill=True, width=10)
         return dbb.cpu().numpy()
