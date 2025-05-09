@@ -3,8 +3,10 @@ Script for training.
 '''
 
 import sys
-from omegaconf import OmegaConf
 import logging
+from omegaconf import OmegaConf
+
+import numpy as np
 
 import torch
 import lightning as L
@@ -19,7 +21,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 log = logging.getLogger(__name__)
-log = create_logger(log)
+log = create_logger(log, level=logging.DEBUG)  # Ensure logging level is set to DEBUG
 
 def train(config_file):
     '''
@@ -33,7 +35,8 @@ def train(config_file):
 
     # Seed everything
     if config['seed']:
-        torch.manual_seed(config['seed'])
+        log.info('Setting seed')
+        L.seed_everything(config['seed'])
 
     # Instantiate the datamodule
     datamodule = MilleAcariDataModule(**config['datamodule'])
@@ -47,7 +50,7 @@ def train(config_file):
     model = MilleAcariNet(backbone=backbone, **config['model'])
 
     # Instantiate the callbacks
-    callbacks = []
+    callbacks = [EarlyStopping(monitor='val/loss', patience=5, mode='min')]
 
     # Instantiate the trainer
     trainer = L.Trainer(**config['trainer'], callbacks=callbacks)
@@ -56,7 +59,8 @@ def train(config_file):
     trainer.fit(model, datamodule)
 
     # Finalize
-    trainer.predict(model, dataloaders=datamodule.val_dataloader())
+    dbb = trainer.predict(model, dataloaders=datamodule.test_dataloader())
+    np.save('prediction.npy', np.asarray(dbb))
 
 
 if __name__=='__main__':

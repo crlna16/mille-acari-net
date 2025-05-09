@@ -24,4 +24,4 @@ model:
 trainer:
   accelerator: mps 
   num_nodes: 1
-  max_epochs: 100
+  max_epochs: 1
