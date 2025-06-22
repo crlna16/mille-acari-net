@@ -4,6 +4,8 @@ MilleAcariNet
 
 import logging
 
+import numpy as np
+
 import torch
 from torch import nn
 from torch import optim
@@ -172,6 +174,55 @@ class MilleAcariNet(L.LightningModule):
         self.log('val/loss', loss, on_epoch=True, prog_bar=True)
         #self.log('val/acc', acc, on_epoch=True)
 
+
+        # save predictions for visualization (first batch item only)
+        x = x[0]
+        pred_boxes = y[:, :, :4]  # boxes in XYWH format
+        pred_obj_scores = torch.ones_like(pred_boxes)[:, :, 0]#y[:, :, 4]
+        y = y[0]
+        yhat = yhat[0]
+        # Filter predictions by confidence score
+        confidence_threshold = self.confidence_threshold  # Adjust this threshold as needed
+        confident_mask = pred_obj_scores.squeeze(0) > confidence_threshold
+        
+        # Apply confidence filtering
+        filtered_boxes = pred_boxes.squeeze(0)[confident_mask]
+        filtered_scores = pred_obj_scores.squeeze(0)[confident_mask]
+        
+        log.info(f'Boxes before filtering: {pred_boxes.squeeze(0).shape[0]}')
+        log.info(f'Boxes after confidence filtering: {filtered_boxes.shape[0]}')
+        
+        # Convert filtered boxes to XYXY format for NMS
+        filtered_boxes_xyxy = box_convert(filtered_boxes, in_fmt='xywh', out_fmt='xyxy')
+        
+        # Apply Non-Maximum Suppression to remove overlapping boxes
+        iou_threshold = self.iou_threshold  # Adjust this threshold as needed
+        keep_indices = torchvision.ops.nms(
+            filtered_boxes_xyxy, 
+            filtered_scores,
+            iou_threshold
+        )
+        
+        # Get final predictions
+        final_boxes_xyxy = filtered_boxes_xyxy[keep_indices]
+        final_scores = filtered_scores[keep_indices]
+        
+        log.info(f'Final boxes after NMS: {final_boxes_xyxy.shape[0]}')
+        
+        # Visualize only the final predictions
+        dbb = draw_bounding_boxes(
+            x.squeeze(0), 
+            final_boxes_xyxy, 
+            labels=[f"{score:.2f}" for score in final_scores], 
+            colors='red', 
+            fill=True, 
+            width=2,
+            font_size=12
+        )
+
+        dbb = dbb.cpu().numpy()
+        np.save(f'predictions/val_epoch_{self.current_epoch}_batch_{batch_idx}.npy', dbb)
+        
     def predict_step(self, batch, batch_idx):
         x, y = batch
         yhat = self(x)
@@ -225,6 +276,22 @@ class MilleAcariNet(L.LightningModule):
         return dbb.cpu().numpy()
 
     def configure_optimizers(self):
-        '''Configure the optimizer to train all model parameters'''
+        '''Configure the optimizer and learning rate scheduler'''
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)
-        return optimizer
+        
+        # Add ReduceLROnPlateau scheduler that halves the learning rate when val/loss plateaus
+        scheduler = {
+            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode='min',
+                factor=0.5,    # halve the learning rate
+                patience=5,    # wait 5 epochs for improvement
+                verbose=True,
+                min_lr=1e-6    # don't reduce lr below this value
+            ),
+            'monitor': 'val/loss',  # monitor validation loss
+            'interval': 'epoch',
+            'frequency': 1
+        }
+        
+        return [optimizer], [scheduler]

@@ -50,14 +50,15 @@ class YOLOBaseDataset(ABC):
             self.image_files = image_files
 
         self.augment = augment
+        log.info(f'Augmentation enabled: {self.augment}')
         if self.augment:
             self.transform = v2.Compose([
                 RandomIoUCropWithFallback({'min_scale': 0.5, 'trials': 100}, {'size': size}),  # Increase min_scale to avoid extreme crops
                 v2.Resize((size, size)),  # Increased from 512 to 640 for better detail
                 v2.RandomHorizontalFlip(0.5),
                 v2.RandomVerticalFlip(0.5),
-                v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # More controlled color jitter
-                v2.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.0)),  # Add blur for robustness
+                #v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # More controlled color jitter
+                #v2.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 1.0)),  # Add blur for robustness
                 v2.ToDtype(torch.float32, scale=True)
             ])
         else:
@@ -183,7 +184,6 @@ class MilleAcariDataModule(L.LightningDataModule):
         Args:
           images_dir (str): path to images
           labels_dir (str): path to labels
-          augment: TODO specify data augmentation
           size (int): Image size.
           max_samples (int): Maximum number of samples. Defaults to None (use map-style dataset).
           val_size (float): fraction of validation data. Defaults to 0.2
@@ -240,4 +240,4 @@ class MilleAcariDataModule(L.LightningDataModule):
 
     def predict_dataloader(self):
         # TODO run predictions on the unlabeled data
-        return DataLoader(self.val_ds, batch_size=1, )
+        return DataLoader(self.test_ds, batch_size=1, )

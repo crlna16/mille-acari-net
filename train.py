@@ -11,7 +11,7 @@ import numpy as np
 import torch
 import lightning as L
 
-from lightning.pytorch.callbacks import EarlyStopping
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor
 
 from src.milleacarinet.datamodule import MilleAcariDataModule
 from src.milleacarinet.model import MilleAcariNet, YoloV5Backbone
@@ -50,7 +50,9 @@ def train(config_file):
     model = MilleAcariNet(backbone=backbone, **config['model'])
 
     # Instantiate the callbacks
-    callbacks = [EarlyStopping(monitor='val/loss', patience=5, mode='min')]
+    callbacks = [EarlyStopping(monitor='val/loss', patience=20, mode='min'),
+                 ModelCheckpoint(monitor='val/loss', mode='min', save_top_k=1, filename='best_model'),
+                 LearningRateMonitor(logging_interval='epoch')]
 
     # Instantiate the trainer
     trainer = L.Trainer(**config['trainer'], callbacks=callbacks)
