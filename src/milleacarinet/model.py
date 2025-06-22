@@ -16,10 +16,67 @@ import torchvision
 from torchvision.utils import draw_bounding_boxes
 from torchvision.ops import box_convert
 
+from ultralytics import YOLO
+
 from .utils import YoloLoss, create_logger
 
 log = logging.getLogger(__name__)
 log = create_logger(log)
+
+class YoloV8Backbone(nn.Module):
+    '''
+    Pretrained YOLOv8 backbone
+    '''
+    def __init__(self,
+                 model_size: str='n',  # n, s, m, l, x
+                 pretrained: bool=True,
+                 freeze_backbone: bool=False,
+                 ):
+        '''
+        Initialize the YOLOv8 model.
+
+        Args:
+          model_size (str): Size of YOLOv8 model ('n', 's', 'm', 'l', 'x'). Defaults to 'n' (nano).
+          pretrained (bool): Use pretrained model. Defaults to True.
+          freeze_backbone (bool): Freeze backbone layers. Defaults to False.
+        '''
+        super().__init__()
+        
+        # Import here to avoid dependency issues if not using this class
+        
+        # Load the model - YOLOv8 with specified size
+        self.model = YOLO(f"yolov8{model_size}.pt")
+        
+        # Extract the backbone part of the model
+        self.backbone = self.model.model.model[0:9]  # Layers 0-9 contain the backbone
+        
+        # Freeze backbone if requested
+        if freeze_backbone:
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+                
+        # Add detection head for object detection
+        # This is a simplified detection head - you might want to customize this
+        self.detection_head = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.SiLU(),
+            nn.Conv2d(256, 5, kernel_size=1)  # 4 box coords + 1 objectness score
+        )
+        
+    def forward(self, x):
+        '''Extract features using backbone and apply detection head'''
+        # Get features from backbone
+        features = self.backbone(x)
+        
+        # Apply detection head
+        detections = self.detection_head(features)
+        
+        # Reshape to expected format [batch_size, num_predictions, 5]
+        batch_size = x.shape[0]
+        detections = detections.permute(0, 2, 3, 1).reshape(batch_size, -1, 5)
+        
+        return detections
 
 class YoloV5Backbone(nn.Module):
     '''
